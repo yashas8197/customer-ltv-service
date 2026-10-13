@@ -1,0 +1,19 @@
+node_modules
+dist
+
+# env files (keep .env.example committed)
+.env
+.env.*
+!.env.example
+
+# generated Prisma client
+/src/generated
+
+# input data files (too large for git)
+/data
+
+# unit tests (not part of the brief)
+/tests
+
+.DS_Store
+*.log
