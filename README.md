@@ -4,6 +4,8 @@ A backend service that loads e-commerce purchase events for five brands into Pos
 
 Built with Express 5, TypeScript, Prisma and Postgres.
 
+Video walkthrough: https://www.loom.com/share/6658ed7b4d86480aba062ba53b1d5192
+
 ## Setup
 
 You need Node.js 20+ and a Postgres database (a free Aiven instance works).
