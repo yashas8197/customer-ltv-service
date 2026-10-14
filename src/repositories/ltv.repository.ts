@@ -84,12 +84,3 @@ export async function getCohortLtvRows(
     totalRevenue: row.totalRevenue.toNumber(),
   }));
 }
-
-// The most recent month the brand has any revenue in (Table C), or null if there is no data.
-export async function getLatestTransactionMonth(brandId: string): Promise<Date | null> {
-  const result = await prisma.customerMonthlyRevenue.aggregate({
-    where: { brandId },
-    _max: { transactionMonth: true },
-  });
-  return result._max.transactionMonth;
-}

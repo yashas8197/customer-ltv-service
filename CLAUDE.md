@@ -77,7 +77,8 @@ Table structures in the spec are marked tentative.
 - `startMonth` and `endMonth` bound `acquisitionCohort` and must each be the first of a month; anything else (e.g. `2025-01-14`) is an error.
 - Response shape: `{ success, data: { brandId, startMonth, endMonth, currency, monthGaps: number[], cohorts: [{ cohortMonth, values }] } }`. There is no `cohortSize`; the coordinator removed it from the brief.
 - Each value is the total revenue of that cohort in that month gap, straight from Table D (confirmed by the coordinator on 2026-10-13: not divided by cohort size and not cumulative), with at most 2 decimals. A past month with no purchases is `0`.
-- `values` is aligned to `monthGaps`, with `null` for month gaps that have not happened yet for that cohort (the triangular shape in the screenshot).
+- `monthGaps` is `0..N`, where N is the months between `startMonth` and `endMonth` (confirmed by the coordinator on 2026-10-14: `2025-01-01` to `2025-10-01` gives `0..9`). It does not depend on how far the data runs.
+- `values` is aligned to `monthGaps`, with `null` only for month gaps after the current calendar month in UTC (confirmed by the coordinator on 2026-10-14). Months that have passed are numbers, `0` if there were no purchases, even after the data ends in January 2026. "Now" is the real date, not the latest month in the data.
 - `currency` comes from `brands.json`.
 
 ## Ambiguities in the spec and how they were resolved

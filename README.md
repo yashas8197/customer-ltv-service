@@ -109,11 +109,11 @@ curl "http://localhost:3000/api/v1/ltv-retention-cohort?brandId=brand_01&startMo
     "startMonth": "2025-01-01",
     "endMonth": "2025-03-01",
     "currency": "₹",
-    "monthGaps": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    "monthGaps": [0, 1, 2],
     "cohorts": [
-      { "cohortMonth": "2025-01-01", "values": [18638016.97, 3935629.06, 2163582.18, 758429, 236374.39, 40765.42, 0, 0, 0, 0, 0, 0, 0] },
-      { "cohortMonth": "2025-02-01", "values": [15990810.19, 4041863.67, 1962917.5, 824536.39, 254010.9, 27661.92, 0, 0, 0, 0, 0, 0, null] },
-      { "cohortMonth": "2025-03-01", "values": [18278076.41, 4370322.82, 2337498.55, 685600.29, 231660.99, 44107.88, 4978.99, 0, 0, 0, 0, null, null] }
+      { "cohortMonth": "2025-01-01", "values": [18638016.97, 3935629.06, 2163582.18] },
+      { "cohortMonth": "2025-02-01", "values": [15990810.19, 4041863.67, 1962917.5] },
+      { "cohortMonth": "2025-03-01", "values": [18278076.41, 4370322.82, 2337498.55] }
     ]
   }
 }
@@ -159,9 +159,10 @@ All tables are created by the migration in `src/prisma/migrations/`.
 
 ### Retention cohort
 - Each value is the **total revenue** of one acquisition cohort in one month gap, read straight from Table D, with at most 2 decimal places.
-- A month the cohort has lived through without any purchase is `0`.
-- A month that has not happened yet for a cohort is `null`. "Happened" means on or before the brand's latest month with any revenue.
-- `monthGaps` covers the oldest cohort returned, which has the longest history.
+- A month that has already started, up to and including the current calendar month (UTC), is a number. It is `0` if the cohort made no purchases in it, including months after the data ends.
+- A month after the current month has not happened yet and is `null`.
+- `monthGaps` runs from 0 to the number of months between `startMonth` and `endMonth`, and every `values` array has that many entries. For `2025-01-01` to `2025-10-01` that is `[0, …, 9]`, so 10 values per cohort.
+- For example, in October 2026, `startMonth=2025-01-01&endMonth=2027-03-01` gives `monthGaps` `[0, …, 26]`. The `2025-01-01` cohort has numbers up to gap 21 (October 2026) and `null` from gap 22 (November 2026). The data ends in January 2026, so gaps 13 to 21 are `0`.
 
 ## Decisions and assumptions
 
@@ -169,7 +170,8 @@ The brief leaves some details open. These are the choices made.
 
 - **`GET` for the retention endpoint.** The brief lists it as `GET` in the summary table and `POST` in section 4.3. It only reads data and takes query params, so it is `GET`.
 - **How `values` is calculated.** The brief does not give a formula, and its sample shows 4-decimal figures, so this was confirmed with the coordinator: the API returns the total revenue for each acquisition cohort and month gap, not a per-customer or cumulative figure. `cohortSize` was removed from the response for the same reason.
-- **`0` versus `null`.** A past month with no purchases is `0`, because it happened and earned nothing. A month that has not happened yet is `null`, as in the brief's sample.
+- **Number of month gaps.** The brief does not say how many columns to return. This was confirmed with the coordinator: `monthGaps` is set by the range between `startMonth` and `endMonth`, not by how much data exists.
+- **`0` versus `null`.** This was confirmed with the coordinator. A month that has passed is a number, `0` if there were no purchases, because it happened and earned nothing. A month after the current calendar month has not happened yet and is `null`. "Now" is today's date, not the last month in the data, so the response changes as months pass.
 - **Currency symbol.** `brands.json` holds ISO codes (`INR`, `AUD`) but the brief's sample response shows a symbol (`A$`). The codes are mapped to symbols (`₹`, `$`, `£`, `A$`); an unmapped code is returned as is.
 - **`customer_type` value.** The brief writes `first_time` in the calculation steps, but the schema, the example and the data all use `first-time`. The data's value is used.
 - **No API keys.** The brief says `brands.json` contains an API key per brand, but the file provided only has `brand_id` and `currency`, so there is no authentication.
@@ -219,3 +221,5 @@ The SQL was checked separately: the row counts and the first cohort's values ret
 ## AI usage
 
 This project was built with Claude Code as a pair programmer, working one step at a time: setup, schema, ingestion, restructuring into layers, LTV calculation, then the cohort endpoint.
+
+Snippets of those conversations are in [docs/ai-conversations.md](docs/ai-conversations.md).

@@ -1,7 +1,7 @@
 import { findBrandById } from "../repositories/brand.repository";
-import { getCohortLtvRows, getLatestTransactionMonth } from "../repositories/ltv.repository";
+import { getCohortLtvRows } from "../repositories/ltv.repository";
 import { CohortGrid, CohortLtvRow, CohortQuery, RetentionCohortResponse } from "../types/cohort";
-import { formatDate, monthsBetween } from "../utils/date";
+import { firstOfMonth, formatDate, monthsBetween } from "../utils/date";
 import { AppError } from "../utils/errors";
 
 // brands.json stores ISO codes; the frontend shows a symbol in front of each value.
@@ -19,12 +19,27 @@ function round2(value: number): number {
 
 // Builds the cohort table shown on the frontend from Table D rows.
 //
+// The columns are set by the requested range: from startMonth to endMonth is N
+// months, so monthGaps is 0..N and every values array has N + 1 entries
+// (confirmed by the coordinator on 2026-10-14).
+//
 // Each value is the total revenue of one acquisition cohort in one month gap.
-// A month the cohort has lived through without any purchase is 0.
-// A month gap that has not happened yet for a cohort is null, which gives the
-// triangular shape. `ltvRows` must be sorted oldest cohort first.
-export function buildCohortGrid(ltvRows: CohortLtvRow[], latestMonth: Date | null): CohortGrid {
-  if (ltvRows.length === 0 || latestMonth === null) return { monthGaps: [], cohorts: [] };
+// A month that has already started, up to and including `currentMonth`, is a
+// number: 0 if the cohort made no purchases in it. A month after `currentMonth`
+// has not happened yet and is null, which gives the triangular shape
+// (confirmed by the coordinator on 2026-10-14). `currentMonth` is passed in
+// rather than read from the clock so the function can be tested with a fixed date.
+// `ltvRows` must be sorted oldest cohort first.
+export function buildCohortGrid(
+  ltvRows: CohortLtvRow[],
+  startMonth: Date,
+  endMonth: Date,
+  currentMonth: Date,
+): CohortGrid {
+  const maxGap = monthsBetween(startMonth, endMonth);
+  const monthGaps = Array.from({ length: maxGap + 1 }, (_, gap) => gap);
+
+  if (ltvRows.length === 0) return { monthGaps, cohorts: [] };
 
   // Group the rows by cohort. A Map keeps the cohorts in the order they arrive (oldest first).
   const revenueByCohort = new Map<string, { cohortMonth: Date; revenueByGap: Map<number, number> }>();
@@ -36,12 +51,9 @@ export function buildCohortGrid(ltvRows: CohortLtvRow[], latestMonth: Date | nul
     revenueByCohort.get(cohortKey)!.revenueByGap.set(row.monthGap, row.totalRevenue);
   }
 
-  // The oldest cohort has the most months of history, so it sets the number of columns.
-  const maxGap = Math.max(0, monthsBetween(ltvRows[0].cohortMonth, latestMonth));
-  const monthGaps = Array.from({ length: maxGap + 1 }, (_, gap) => gap);
-
   const cohorts = [...revenueByCohort.entries()].map(([cohortKey, { cohortMonth, revenueByGap }]) => {
-    const monthsOfHistory = monthsBetween(cohortMonth, latestMonth);
+    // Gaps 0..monthsOfHistory have started; anything later is in the future.
+    const monthsOfHistory = monthsBetween(cohortMonth, currentMonth);
 
     const values = monthGaps.map((gap) => {
       if (gap > monthsOfHistory) return null;
@@ -60,16 +72,14 @@ export async function getRetentionCohort(query: CohortQuery): Promise<RetentionC
   const brand = await findBrandById(brandId);
   if (!brand) throw new AppError(`Brand not found: ${brandId}`, 404);
 
-  const [ltvRows, latestMonth] = await Promise.all([
-    getCohortLtvRows(brandId, startMonth, endMonth),
-    getLatestTransactionMonth(brandId),
-  ]);
+  const ltvRows = await getCohortLtvRows(brandId, startMonth, endMonth);
+  const currentMonth = firstOfMonth(new Date());
 
   return {
     brandId,
     startMonth: formatDate(startMonth),
     endMonth: formatDate(endMonth),
     currency: CURRENCY_SYMBOLS[brand.currency] ?? brand.currency,
-    ...buildCohortGrid(ltvRows, latestMonth),
+    ...buildCohortGrid(ltvRows, startMonth, endMonth, currentMonth),
   };
 }

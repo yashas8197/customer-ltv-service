@@ -21,6 +21,11 @@ export function isFirstOfMonth(date: Date): boolean {
   return date.getUTCDate() === 1;
 }
 
+// The first day of the month that `date` falls in, in UTC: 2026-10-15 gives 2026-10-01.
+export function firstOfMonth(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
 // Formats as YYYY-MM-DD
 export function formatDate(date: Date): string {
   return date.toISOString().slice(0, 10);
